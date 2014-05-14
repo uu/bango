@@ -10,7 +10,7 @@ Requirements
 
 Build
 -----
-Gentoo people goes [here](https://github.com/uu/ubuilds/net-firewall/bango)
+Gentoo people goes [here](https://github.com/uu/ubuilds/tree/master/net-firewall/bango)
 
 Others:
 ```git clone ... && go get && go build```
