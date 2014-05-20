@@ -71,7 +71,7 @@ func BangoSubscribe() {
 			log.Println("Received:", subscr.Channel, subscr.Payload)
 			BanIP(subscr.Payload)
 		default:
-			log.Println("ERROR: Something went wrong")
+			panic("ERROR: Something went wrong")
 		}
 	}
 
