@@ -8,7 +8,7 @@ import (
     //	"strconv"
     //	"fmt"
     "log"
-    "gopkg.in/redis.v1"
+    "gopkg.in/redis.v2"
     "runtime"
     "os"
     "strings"
@@ -51,6 +51,8 @@ func CreateConnection() {
 
     if err == nil {
         log.Println("Connected succesfully and got", pong, "from redis://" + serverstring)
+    } else {
+        panic(err.Error())
     }
 }
 
@@ -65,6 +67,9 @@ func BangoSubscribe() {
     for {
         msg, err := pubsub.Receive()
         _ = err
+        if err != nil {
+            log.Println("baaad")
+        }
 
         switch subscr := msg.(type) {
         case *redis.Subscription:
@@ -77,7 +82,7 @@ func BangoSubscribe() {
                 BanIP(subscr.Payload)
             }
         default:
-            panic("ERROR: Something went wrong")
+            panic("ERROR: Something went wrong: " + err.Error())
         }
     }
 
@@ -116,7 +121,7 @@ func BangoPublish(channel, ip string) {
 //
 
 const (
-    version = "0.1"
+    version = "0.0.2"
 )
 
 // Packaged all Server settings
