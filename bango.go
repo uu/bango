@@ -5,16 +5,12 @@
 package main
 
 import (
-    //	"strconv"
-    //	"fmt"
     "log"
     "gopkg.in/redis.v2"
     "runtime"
     "os"
     "strings"
     "os/exec"
-    //	"syscall"
-    //	"reflect"
     "github.com/Unknwon/goconfig"
     "net"
 )
@@ -26,13 +22,13 @@ func init() {
 }
 
 func main() {
-    action, ip := ParseFlags()
+    action, payload := ParseFlags()
     runtime.GOMAXPROCS(4)
     CreateConnection()
 
     switch action {
     case "publish":
-        BangoPublish("fail2ban", ip)
+        BangoPublish("fail2ban", payload)
     default:
         BangoSubscribe()
     }
@@ -68,7 +64,7 @@ func BangoSubscribe() {
         msg, err := pubsub.Receive()
         _ = err
         if err != nil {
-            log.Println("baaad")
+            log.Println("Subscription failed")
         }
 
         switch subscr := msg.(type) {
@@ -103,17 +99,15 @@ func UnBanIP(ip string) {
 
 
 
-func BangoPublish(channel, ip string) {
+func BangoPublish(channel, payload string) {
     log.Println("Starting publish in 'fail2ban' channel")
-    if CheckIP(ip) {
-        pubsub := client.PubSub()
-        defer pubsub.Close()
-        pub := client.Publish(channel, ip)
-        if pub.Err() == nil {
-            log.Printf("Successfully published '%s'", ip)
-        }
-    }
+	pubsub := client.PubSub()
+	defer pubsub.Close()
+	pub := client.Publish(channel, payload)
 
+	if pub.Err() == nil {
+		log.Printf("Successfully published '%s'", payload)
+	}
 }
 
 //
@@ -121,7 +115,7 @@ func BangoPublish(channel, ip string) {
 //
 
 const (
-    version = "0.0.2"
+    version = "0.0.3"
 )
 
 // Packaged all Server settings
@@ -224,14 +218,14 @@ func ExecCommand(command string, args ...string) {
 }
 
 func ParseFlags() (string, string) {
-    var action, ip string = "", ""
+    var action, payload string = "", ""
     if len(os.Args) > 2 {
         // action: subscribe, publish
         // default: subscribe
         action = os.Args[1]
-        // ip address to ban
+        // subaction and ip address to ban
         // default: ""
-        ip = os.Args[2]
+        payload = os.Args[2]
     }
-    return action, ip
+    return action, payload
 }
