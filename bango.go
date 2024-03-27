@@ -1,14 +1,15 @@
 //
-// Michael Pirogov © 2014 <vbnet.ru@gmail.com>
+// Michael Pirogov © 2024 <vbnet.ru@gmail.com>
 //
 
 package main
 
 import (
     "log"
-    "gopkg.in/redis.v2"
+    "github.com/redis/go-redis/v9"
     "runtime"
     "os"
+    "context"
     "strings"
     "os/exec"
     "github.com/Unknwon/goconfig"
@@ -38,12 +39,11 @@ func CreateConnection() {
     var serverstring = ""
     serverstring = config.redis.server+":"+config.redis.port
 
-    client = redis.NewTCPClient(&redis.Options{
+    client = redis.NewClient(&redis.Options{
                                         Addr:     serverstring,
                                         Password: config.redis.pass,
-                                        DB:       int64(config.redis.db),})
-
-    pong, err := client.Ping().Result()
+                                        DB:       int(config.redis.db),})
+    pong, err := client.Ping(context.Background()).Result()
 
     if err == nil {
         log.Println("Connected succesfully and got", pong, "from redis://" + serverstring)
@@ -53,35 +53,24 @@ func CreateConnection() {
 }
 
 func BangoSubscribe() {
-    pubsub := client.PubSub()
+    pubsub := client.Subscribe(context.Background(), "fail2ban")
     defer pubsub.Close()
     var unbanprefix = "unban"
 
-    err := pubsub.Subscribe("fail2ban")
-    _ = err
-
     for {
-        msg, err := pubsub.Receive()
+        msg, err := pubsub.ReceiveMessage(context.Background())
         _ = err
         if err != nil {
             log.Println("Subscription failed")
         }
 
-        switch subscr := msg.(type) {
-        case *redis.Subscription:
-            log.Println("Subscribed sucessfully to 'fail2ban' channel")
-        case *redis.Message:
-            log.Println("Received:", subscr.Channel, subscr.Payload)
-            if strings.HasPrefix(subscr.Payload, unbanprefix) {
-                UnBanIP(strings.TrimPrefix(subscr.Payload,unbanprefix))
-            } else {
-                BanIP(subscr.Payload)
-            }
-        default:
-            panic("ERROR: Something went wrong: " + err.Error())
+        log.Println("Received:", msg.Channel, msg.Payload)
+        if strings.HasPrefix(msg.Payload, unbanprefix) {
+            UnBanIP(strings.TrimPrefix(msg.Payload,unbanprefix))
+        } else {
+            BanIP(msg.Payload)
         }
     }
-
 }
 
 func BanIP(ip string) {
@@ -101,9 +90,7 @@ func UnBanIP(ip string) {
 
 func BangoPublish(channel, payload string) {
     log.Println("Starting publish in 'fail2ban' channel")
-	pubsub := client.PubSub()
-	defer pubsub.Close()
-	pub := client.Publish(channel, payload)
+	pub := client.Publish(context.Background(), channel, payload)
 
 	if pub.Err() == nil {
 		log.Printf("Successfully published '%s'", payload)
@@ -115,7 +102,7 @@ func BangoPublish(channel, payload string) {
 //
 
 const (
-    version = "0.0.3"
+    version = "0.0.4"
 )
 
 // Packaged all Server settings
@@ -188,8 +175,6 @@ func CheckIP(checkip string) bool {
         log.Printf("ERROR: '%v' is not an IPv4 address. Doing nothing.\n", checkip)
         return false
     } else {
-        //		s := trial.To4()
-        //		log.Println(reflect.TypeOf(s))
         return true
     }
 }
