@@ -20,7 +20,7 @@ jobs:
         run: |
             mkdir bango-${{github.ref_name}}
             strip bango
-            cp bango README.md LICENSE bango.ini bango-${{github.ref_name}}/
+            cp -a bango README.md LICENSE bango.ini actions bango-${{github.ref_name}}/
             tar czpf bango-${{github.ref_name}}.tar.gz bango-${{github.ref_name}}
       - name: Publish release
         if: startsWith(github.ref, 'refs/tags/v')
