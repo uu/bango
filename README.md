@@ -18,12 +18,10 @@ Others:
 
 License
 -------
-Copyright (c) 2014 Michael Pirogov
+Copyright (c) 2014-2025 Michael Pirogov
 
 [WTFPL-2](https://github.com/uu/bango/blob/master/LICENSE)
 
 Status
 ------
 Almoust usable alpha :)
-
-

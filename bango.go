@@ -1,11 +1,12 @@
 //
-// Michael Pirogov © 2024 <vbnet.ru@gmail.com>
+// Michael Pirogov © 2025 <vbnet.ru@gmail.com>
 //
 
 package main
 
 import (
     "log"
+    "fmt"
     "github.com/redis/go-redis/v9"
     "runtime"
     "os"
@@ -23,13 +24,15 @@ func init() {
 }
 
 func main() {
+    log.Printf("Starting %s version", version)
+
     action, payload := ParseFlags()
     runtime.GOMAXPROCS(4)
     CreateConnection()
 
     switch action {
     case "publish":
-        BangoPublish("fail2ban", payload)
+        BangoPublish(config.fail2ban.channel, payload)
     default:
         BangoSubscribe()
     }
@@ -42,6 +45,7 @@ func CreateConnection() {
     client = redis.NewClient(&redis.Options{
                                         Addr:     serverstring,
                                         Password: config.redis.pass,
+                                        Protocol: 2, // RESP2 for compatibility
                                         DB:       int(config.redis.db),})
     pong, err := client.Ping(context.Background()).Result()
 
@@ -53,7 +57,7 @@ func CreateConnection() {
 }
 
 func BangoSubscribe() {
-    pubsub := client.Subscribe(context.Background(), "fail2ban")
+    pubsub := client.Subscribe(context.Background(), config.fail2ban.channel)
     defer pubsub.Close()
     var unbanprefix = "unban"
 
@@ -75,7 +79,9 @@ func BangoSubscribe() {
 
 func BanIP(ip string) {
     if CheckIP(ip) {
-        ExecCommand("fail2ban-client", "set", config.fail2ban.jail, "banip", ip)
+        if CheckBanIP(ip) {
+            ExecCommand("fail2ban-client", "set", config.fail2ban.jail, "banip", ip)
+        }
     }
 }
 
@@ -85,11 +91,16 @@ func UnBanIP(ip string) {
     }
 }
 
-
-
+func CheckBanIP(ip string) bool {
+    res := ExecCommand("fail2ban-client", "get", config.fail2ban.jail, "banned", ip)
+    if res != "0" {
+        log.Printf("IP %s already banned", ip)
+    }
+    return (res == "0") // true if not banned
+}
 
 func BangoPublish(channel, payload string) {
-    log.Println("Starting publish in 'fail2ban' channel")
+    log.Println("Starting publish in '" + channel + "' channel")
 	pub := client.Publish(context.Background(), channel, payload)
 
 	if pub.Err() == nil {
@@ -102,7 +113,7 @@ func BangoPublish(channel, payload string) {
 //
 
 const (
-    version = "0.0.4"
+    version = "0.0.5"
 )
 
 // Packaged all Server settings
@@ -127,7 +138,6 @@ type Global struct {
 type Fail2ban struct {
     channel string
     jail    string
-    useF2C  bool
 }
 
 // Define a global config varible
@@ -162,7 +172,6 @@ func LoadBangoConfig(fileName string) {
     // Parse the fail2ban section
     config.fail2ban.channel = cfg.MustValue("fail2ban", "channel", "fail2ban")
     config.fail2ban.jail = cfg.MustValue("fail2ban", "jail", "fail2ban-recidive")
-    config.fail2ban.useF2C = cfg.MustBool("fail2ban", "usef2bclient", true)
 }
 
 //
@@ -179,27 +188,27 @@ func CheckIP(checkip string) bool {
     }
 }
 
-func ExecCommand(command string, args ...string) {
+func ExecCommand(command string, args ...string) string {
     binary, lookErr := exec.LookPath(command)
     if lookErr != nil {
         panic(lookErr)
     }
 
-    log.Println("Launching:", command, args)
+    if config.global.debug {
+        log.Println("Launching:", command, args)
+    }
 
     // actually call
-    cmd := exec.Command(binary, args...)
-    err := cmd.Start()
+    output, err := exec.Command(binary, args...).CombinedOutput()
     if err != nil {
         log.Fatal(err)
     }
 
-    log.Println("Waiting for command to finish...")
-    err = cmd.Wait()
     if err != nil {
         log.Printf("Command finished with error: %v", err)
+        log.Printf("Output: %s", output)
     }
-    log.Printf("done")
+    return strings.Trim(fmt.Sprintf("%s", output), "\n")
 }
 
 func ParseFlags() (string, string) {
